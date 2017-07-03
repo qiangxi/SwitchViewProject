@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/SwitchViewProject.iml" filepath="$PROJECT_DIR$/SwitchViewProject.iml" />
+      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/switchview/switchview.iml" filepath="$PROJECT_DIR$/switchview/switchview.iml" />
+    </modules>
+  </component>
+</project>
