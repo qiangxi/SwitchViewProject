@@ -5,24 +5,34 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.support.annotation.Nullable;
+import android.support.v4.widget.ViewDragHelper;
 import android.util.AttributeSet;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.widget.FrameLayout;
+import android.widget.TextView;
 
 import com.qiangxi.switchview.callback.OnItemClickListener;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TimerTask;
 
 /**
  * @author qiang_xi
+ *         7月3号需要干的事情：
+ *         1.把选中背景换成view
+ *         2.使用ViewDragHelper，做好view 的滑动和点击
+ *         3.研究如何在滑动的时候，让字体颜色展示在view上
  */
-public class SwitchView extends View {
+public class SwitchView extends FrameLayout {
     //默认值，单位dp
     private static final int DEFAULT_TOTAL_ITEM_COUNT = 4;//总item数量
     private static final int DEFAULT_ITEM_WIDTH = 80;//默认item宽度
@@ -54,14 +64,19 @@ public class SwitchView extends View {
     private int mItemWidth;
     private int mItemHeight;
     private int[] mSelectedBgMarginArray = new int[4];//选中的item的背景的margin值，位置对应关系为：int[left,top,right,bottom]
-    private int mSelectedBgRadius;//选中的item的背景的圆角角度
     //文本
     private String[] mTextArray = new String[mTotalItemCount];
     //point
     private int mLastX;
     private int mLastY;
-    //touchSlope
+    //mTouchSlop
     private int mTouchSlop;
+    //SlideView
+    private TextView mSlideView;
+    //SlideView bg
+    private Drawable mSelectedDrawable;
+
+    private ViewDragHelper mHelper;
 
     public SwitchView(Context context) {
         this(context, null);
@@ -73,20 +88,39 @@ public class SwitchView extends View {
 
     public SwitchView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        mHelper = ViewDragHelper.create(this, new DragHelperCallback());
         init();
     }
 
     private void init() {
         mTouchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
         mNormalTextSize = spToPx(DEFAULT_TEXT_SIZE);
-        mSelectedTextSize = spToPx(DEFAULT_TEXT_SIZE);
         mItemWidth = dpToPx(DEFAULT_ITEM_WIDTH);
         mItemHeight = dpToPx(DEFAULT_ITEM_HEIGHT);
-        mSelectedBgRadius = dpToPx(5);
         mTextPaint.setDither(true);
         mBgPaint.setDither(true);
         generateDefaultTextArray();
         setupDefaultSelectedBgMargin();
+        setupSlideView();
+    }
+
+    private void setupSlideView() {
+        removeAllViews();
+        mSelectedDrawable = getContext().getResources().getDrawable(R.drawable.bg_selected_drawable);
+        mSlideView = new TextView(getContext());
+        int width = mItemWidth - mSelectedBgMarginArray[0] - mSelectedBgMarginArray[2];
+        int height = mItemHeight - mSelectedBgMarginArray[1] - mSelectedBgMarginArray[3];
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, height);
+        lp.gravity = Gravity.CENTER_VERTICAL;
+        lp.leftMargin = mSelectedBgMarginArray[0];
+        mSlideView.setLayoutParams(lp);
+        mSlideView.setBackground(mSelectedDrawable);
+        mSlideView.setTextColor(mSelectedTextColor);
+        mSlideView.setGravity(Gravity.CENTER);
+        mSlideView.setTextSize(DEFAULT_TEXT_SIZE);
+        mSlideView.setText(mTextArray[0]);
+        addView(mSlideView);
+        mLastSelectedPosition = 0;//默认处于0位置
     }
 
     private void setupDefaultSelectedBgMargin() {
@@ -122,15 +156,36 @@ public class SwitchView extends View {
     /**
      * 平滑移动到上一个位置
      */
-    public void smoothScrollToLastPosition() {
-
+    public void smoothScrollToLastPosition(int position) {
+        if (position == INVALIDATE_POSITION) {
+            return;
+        }
+        int rangeDistance = (mLastSelectedPosition - position) * mItemWidth;
+        moveTo(position, rangeDistance);
     }
 
     /**
      * 平滑移动到指定位置
      */
     public void smoothScrollTo(int position) {
+        if (position == INVALIDATE_POSITION) {
+            return;
+        }
+        int rangeDistance = (position - mLastSelectedPosition) * mItemWidth;
+        moveTo(position, rangeDistance);
+    }
 
+    private void moveTo(final int position, int scrollDistance) {
+        mSlideView.animate()
+                .translationXBy(scrollDistance)
+                .setDuration(200)
+                .withEndAction(new TimerTask() {
+                    @Override
+                    public void run() {
+                        mSlideView.setText(mTextArray[position]);
+                    }
+                })
+                .start();
     }
 
     /**
@@ -149,6 +204,7 @@ public class SwitchView extends View {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
         int widthMode = MeasureSpec.getMode(widthMeasureSpec);
         int widthSize = MeasureSpec.getSize(widthMeasureSpec);
         int heightMode = MeasureSpec.getMode(heightMeasureSpec);
@@ -184,33 +240,15 @@ public class SwitchView extends View {
         }
     }
 
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         for (int i = 0; i < mTotalItemCount; i++) {
             mTextPaint.setColor(mNormalTextColor);
             mTextPaint.setTextSize(mNormalTextSize);
-            if (i == mSelectedPosition) {
-                mTextPaint.setColor(mSelectedTextColor);
-                mTextPaint.setTextSize(mSelectedTextSize);
-                drawSelectedItemBackground(canvas, calculateSelectedItemBound(i));
-            }
             drawText(canvas, i);
         }
-        drawSelectedItemBackground(canvas, calculateSelectedItemBound(0));
-    }
-
-    private RectF calculateSelectedItemBound(int position) {
-        mSelectedItemBound.left = mItemWidth * position + mSelectedBgMarginArray[0];
-        mSelectedItemBound.top = mSelectedBgMarginArray[1];
-        mSelectedItemBound.right = mItemWidth * (position + 1) - mSelectedBgMarginArray[2];
-        mSelectedItemBound.bottom = mItemHeight - mSelectedBgMarginArray[3];
-        return mSelectedItemBound;
-    }
-
-    private void drawSelectedItemBackground(Canvas canvas, RectF selectedItemBound) {
-        mBgPaint.setColor(mSelectedItemBgColor);
-        canvas.drawRoundRect(selectedItemBound, mSelectedBgRadius, mSelectedBgRadius, mBgPaint);
     }
 
     private void drawText(Canvas canvas, int position) {
@@ -223,7 +261,13 @@ public class SwitchView extends View {
     }
 
     @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        return mHelper.shouldInterceptTouchEvent(ev);
+    }
+
+    @Override
     public boolean onTouchEvent(MotionEvent event) {
+        mHelper.processTouchEvent(event);
         // TODO: 2017/7/3 考虑增加多指检测
         int action = event.getAction();
         switch (action) {
@@ -236,16 +280,12 @@ public class SwitchView extends View {
                 }
                 break;
             case MotionEvent.ACTION_MOVE:
-                if (mScrollEnable) {
-                    float x = event.getX();
-                    float distance = x - mLastX;
-                    if (Math.abs(distance) >= mTouchSlop) {
-                        mSelectedItemBound.left += distance;
-                        mSelectedItemBound.right += distance;
-                        invalidate();
-                    }
-                    mLastX = (int) x;
-                }
+//                if (mScrollEnable) {
+//                    float x = event.getX();
+//                    float distance = x - mLastX;
+//                    mSlideView.animate().translationXBy(distance);
+//                    mLastX = (int) x;
+//                }
                 break;
             case MotionEvent.ACTION_UP:
                 float x = event.getX();
@@ -260,8 +300,8 @@ public class SwitchView extends View {
                 if (mSelectedPosition == mLastSelectedPosition) {
                     break;
                 }
+                smoothScrollTo(mSelectedPosition);
                 mLastSelectedPosition = mSelectedPosition;
-                invalidate();
                 break;
         }
         return true;
@@ -276,6 +316,12 @@ public class SwitchView extends View {
         return INVALIDATE_POSITION;
     }
 
+    @Override
+    public void computeScroll() {
+        if (mHelper.continueSettling(true)) {
+            postInvalidate();
+        }
+    }
 
     @Override
     protected Parcelable onSaveInstanceState() {
@@ -321,5 +367,33 @@ public class SwitchView extends View {
     private int getTextStartY() {
         Paint.FontMetricsInt fm = mTextPaint.getFontMetricsInt();
         return getHeight() / 2 - fm.descent + (fm.descent - fm.ascent) / 2;
+    }
+
+
+    private class DragHelperCallback extends ViewDragHelper.Callback {
+
+        @Override
+        public boolean tryCaptureView(View child, int pointerId) {
+            return mScrollEnable && child instanceof TextView;
+        }
+
+        @Override
+        public void onViewReleased(View releasedChild, float xvel, float yvel) {
+            //view中心点坐标
+            int x = (releasedChild.getLeft() - releasedChild.getRight()) / 2;
+            int y = (releasedChild.getTop() - releasedChild.getBottom()) / 2;
+            int targetPosition = findPositionByPoint(x, y);
+            smoothScrollTo(targetPosition);
+        }
+
+        @Override
+        public int getViewHorizontalDragRange(View child) {
+            return getWidth() - mSelectedBgMarginArray[0] - mSelectedBgMarginArray[2];
+        }
+
+        @Override
+        public int clampViewPositionHorizontal(View child, int left, int dx) {
+            return left;
+        }
     }
 }
