@@ -4,18 +4,16 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.PointF;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.support.annotation.Nullable;
-import android.support.v4.widget.ViewDragHelper;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
-import android.view.View;
-import android.view.ViewConfiguration;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
@@ -57,6 +55,7 @@ public class SwitchView extends FrameLayout {
     //范围
     private RectF mSelectedItemBound = new RectF();//选中的item的范围
     private List<RectF> mItemBounds = new ArrayList<>();
+    private List<PointF> mItemCenterPoint = new ArrayList<>();
     //画笔
     private Paint mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Paint mBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -69,14 +68,11 @@ public class SwitchView extends FrameLayout {
     //point
     private int mLastX;
     private int mLastY;
-    //mTouchSlop
-    private int mTouchSlop;
     //SlideView
     private TextView mSlideView;
     //SlideView bg
     private Drawable mSelectedDrawable;
-
-    private ViewDragHelper mHelper;
+    private boolean isSlideViewPressed;
 
     public SwitchView(Context context) {
         this(context, null);
@@ -88,12 +84,10 @@ public class SwitchView extends FrameLayout {
 
     public SwitchView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        mHelper = ViewDragHelper.create(this, new DragHelperCallback());
         init();
     }
 
     private void init() {
-        mTouchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
         mNormalTextSize = spToPx(DEFAULT_TEXT_SIZE);
         mItemWidth = dpToPx(DEFAULT_ITEM_WIDTH);
         mItemHeight = dpToPx(DEFAULT_ITEM_HEIGHT);
@@ -108,19 +102,23 @@ public class SwitchView extends FrameLayout {
         removeAllViews();
         mSelectedDrawable = getContext().getResources().getDrawable(R.drawable.bg_selected_drawable);
         mSlideView = new TextView(getContext());
-        int width = mItemWidth - mSelectedBgMarginArray[0] - mSelectedBgMarginArray[2];
-        int height = mItemHeight - mSelectedBgMarginArray[1] - mSelectedBgMarginArray[3];
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, height);
-        lp.gravity = Gravity.CENTER_VERTICAL;
-        lp.leftMargin = mSelectedBgMarginArray[0];
-        mSlideView.setLayoutParams(lp);
+        setupLayoutParam(mItemWidth, mItemHeight);
         mSlideView.setBackground(mSelectedDrawable);
         mSlideView.setTextColor(mSelectedTextColor);
         mSlideView.setGravity(Gravity.CENTER);
         mSlideView.setTextSize(DEFAULT_TEXT_SIZE);
-        mSlideView.setText(mTextArray[0]);
         addView(mSlideView);
         mLastSelectedPosition = 0;//默认处于0位置
+    }
+
+    private void setupLayoutParam(int itemWidth, int itemHeight) {
+        int width = itemWidth - mSelectedBgMarginArray[0] - mSelectedBgMarginArray[2];
+        int height = itemHeight - mSelectedBgMarginArray[1] - mSelectedBgMarginArray[3];
+        LayoutParams lp = new LayoutParams(width, height);
+        lp.gravity = Gravity.CENTER_VERTICAL;
+        lp.leftMargin = mSelectedBgMarginArray[0] + itemWidth * mSelectedPosition;
+        mSlideView.setLayoutParams(lp);
+        mSlideView.setText(mTextArray[mSelectedPosition]);
     }
 
     private void setupDefaultSelectedBgMargin() {
@@ -161,7 +159,7 @@ public class SwitchView extends FrameLayout {
             return;
         }
         int rangeDistance = (mLastSelectedPosition - position) * mItemWidth;
-        moveTo(position, rangeDistance);
+        moveTo(position, rangeDistance, 200);
     }
 
     /**
@@ -172,17 +170,19 @@ public class SwitchView extends FrameLayout {
             return;
         }
         int rangeDistance = (position - mLastSelectedPosition) * mItemWidth;
-        moveTo(position, rangeDistance);
+        moveTo(position, rangeDistance, 200);
     }
 
-    private void moveTo(final int position, int scrollDistance) {
+    private void moveTo(final int position, float scrollDistance, long duration) {
         mSlideView.animate()
-                .translationXBy(scrollDistance)
-                .setDuration(200)
+                .xBy(scrollDistance)
+                .setDuration(duration)
                 .withEndAction(new TimerTask() {
                     @Override
                     public void run() {
-                        mSlideView.setText(mTextArray[position]);
+                        if (position != INVALIDATE_POSITION) {
+                            mSlideView.setText(mTextArray[position]);
+                        }
                     }
                 })
                 .start();
@@ -192,14 +192,14 @@ public class SwitchView extends FrameLayout {
      * 锁定指定位置，锁定之后该位置不可点击和也不能滑动到该位置
      */
     public void lockPosition(int position) {
-
+        mLockedPosition = position;
     }
 
     /**
      * 解锁指定位置
      */
     public void unlockPosition(int position) {
-
+        mLockedPosition = -1;
     }
 
     @Override
@@ -230,13 +230,14 @@ public class SwitchView extends FrameLayout {
         super.onLayout(changed, left, top, right, bottom);
         mItemWidth = getWidth() / mTotalItemCount;
         mItemHeight = getHeight();
-        setupItemBounds(left, top, right, bottom);
+        setupItemBoundsAndPoint();
     }
 
-    private void setupItemBounds(int left, int top, int right, int bottom) {
+    private void setupItemBoundsAndPoint() {
         mItemBounds.clear();
         for (int i = 0; i < mTotalItemCount; i++) {
             mItemBounds.add(new RectF(i, 0, mItemWidth * (i + 1), mItemHeight));
+            mItemCenterPoint.add(new PointF(mItemWidth * i + mItemWidth / 2, mSlideView.getY()));
         }
     }
 
@@ -261,14 +262,7 @@ public class SwitchView extends FrameLayout {
     }
 
     @Override
-    public boolean onInterceptTouchEvent(MotionEvent ev) {
-        return mHelper.shouldInterceptTouchEvent(ev);
-    }
-
-    @Override
     public boolean onTouchEvent(MotionEvent event) {
-        mHelper.processTouchEvent(event);
-        // TODO: 2017/7/3 考虑增加多指检测
         int action = event.getAction();
         switch (action) {
             case MotionEvent.ACTION_DOWN:
@@ -278,37 +272,60 @@ public class SwitchView extends FrameLayout {
                 if (downPosition == mLockedPosition) {
                     return false;//点击的是被锁定的位置则不处理
                 }
+                isSlideViewPressed = downPosition == mLastSelectedPosition;
                 break;
             case MotionEvent.ACTION_MOVE:
-//                if (mScrollEnable) {
-//                    float x = event.getX();
-//                    float distance = x - mLastX;
-//                    mSlideView.animate().translationXBy(distance);
-//                    mLastX = (int) x;
-//                }
+                if (mScrollEnable && isSlideViewPressed) {
+                    //横向滑动范围
+                    float x = event.getX();
+                    if (mSlideView.getX() > 0 && mSlideView.getX() < getWidth() - mItemWidth * 4 / 5) {
+                        float distance = x - mLastX;
+                        moveTo(INVALIDATE_POSITION, distance, 0);
+                    }
+                    mLastX = (int) x;
+                }
                 break;
             case MotionEvent.ACTION_UP:
-                float x = event.getX();
-                float y = event.getY();
-                mSelectedPosition = findPositionByPoint(x, y);
-                if (mSelectedPosition == INVALIDATE_POSITION) {
-                    break;
+                if (mScrollEnable && isSlideViewPressed) {
+                    float x = mSlideView.getX() + mSlideView.getWidth() / 2;
+                    float y = mSlideView.getY();
+                    mSelectedPosition = findPositionByPoint(x, y);
+                    float distance = findDistanceFromCurrentToTarget(x, y);
+                    moveTo(mSelectedPosition, distance, 50);
+                } else {
+                    float x = event.getX();
+                    float y = event.getY();
+                    mSelectedPosition = findPositionByPoint(x, y);
+                    if (mSelectedPosition == INVALIDATE_POSITION) {
+                        break;
+                    }
+
+                    if (mSelectedPosition == mLastSelectedPosition) {
+                        break;
+                    }
+                    smoothScrollTo(mSelectedPosition);
                 }
                 if (mItemClickListener != null) {
                     mItemClickListener.onItemClick(mSelectedPosition);
                 }
-                if (mSelectedPosition == mLastSelectedPosition) {
-                    break;
-                }
-                smoothScrollTo(mSelectedPosition);
                 mLastSelectedPosition = mSelectedPosition;
+
                 break;
         }
         return true;
     }
 
     private int findPositionByPoint(float x, float y) {
+        if (x < mItemBounds.get(0).left) {
+            return 0;
+        }
+
+        if (x >= mItemBounds.get(mItemBounds.size() - 1).right) {
+            return mItemBounds.size() - 1;
+        }
+
         for (int i = 0; i < mItemBounds.size(); i++) {
+
             if (mItemBounds.get(i).contains(x, y)) {
                 return i;
             }
@@ -316,12 +333,16 @@ public class SwitchView extends FrameLayout {
         return INVALIDATE_POSITION;
     }
 
-    @Override
-    public void computeScroll() {
-        if (mHelper.continueSettling(true)) {
-            postInvalidate();
+    private float findDistanceFromCurrentToTarget(float x, float y) {
+        int targetPosition = findPositionByPoint(x, y);
+        if (targetPosition == INVALIDATE_POSITION) {
+            return 0;
         }
+        PointF targetCenterPoint = mItemCenterPoint.get(targetPosition);
+        //计算x方向的差值
+        return targetCenterPoint.x - x;//>0：右滑，<0：左滑
     }
+
 
     @Override
     protected Parcelable onSaveInstanceState() {
@@ -341,8 +362,7 @@ public class SwitchView extends FrameLayout {
             state = bundle.getParcelable("superState");
             mSelectedPosition = bundle.getInt("selectedPosition");
             mLastSelectedPosition = bundle.getInt("lastSelectedPosition");
-            //请求重新布局,用来恢复View的状态
-            requestLayout();
+            setupLayoutParam(mItemWidth, mItemHeight);
         }
         super.onRestoreInstanceState(state);
     }
@@ -367,33 +387,5 @@ public class SwitchView extends FrameLayout {
     private int getTextStartY() {
         Paint.FontMetricsInt fm = mTextPaint.getFontMetricsInt();
         return getHeight() / 2 - fm.descent + (fm.descent - fm.ascent) / 2;
-    }
-
-
-    private class DragHelperCallback extends ViewDragHelper.Callback {
-
-        @Override
-        public boolean tryCaptureView(View child, int pointerId) {
-            return mScrollEnable && child instanceof TextView;
-        }
-
-        @Override
-        public void onViewReleased(View releasedChild, float xvel, float yvel) {
-            //view中心点坐标
-            int x = (releasedChild.getLeft() - releasedChild.getRight()) / 2;
-            int y = (releasedChild.getTop() - releasedChild.getBottom()) / 2;
-            int targetPosition = findPositionByPoint(x, y);
-            smoothScrollTo(targetPosition);
-        }
-
-        @Override
-        public int getViewHorizontalDragRange(View child) {
-            return getWidth() - mSelectedBgMarginArray[0] - mSelectedBgMarginArray[2];
-        }
-
-        @Override
-        public int clampViewPositionHorizontal(View child, int left, int dx) {
-            return left;
-        }
     }
 }
