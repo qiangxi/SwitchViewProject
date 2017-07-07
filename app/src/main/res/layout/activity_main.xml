@@ -12,14 +12,16 @@
         android:gravity="center"
         android:orientation="vertical"
         >
+
         <Button
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="点击"
-            android:onClick="click"/>
+            android:onClick="click"
+            android:text="点击"/>
+
         <com.qiangxi.switchview.SwitchView
             android:id="@+id/switchView"
-            android:layout_width="200dp"
+            android:layout_width="match_parent"
             android:layout_height="80dp"
             android:background="@android:color/black"/>
     </LinearLayout>

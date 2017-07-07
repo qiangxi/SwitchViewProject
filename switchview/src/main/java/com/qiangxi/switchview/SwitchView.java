@@ -1,5 +1,6 @@
 package com.qiangxi.switchview;
 
+import android.animation.TimeInterpolator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -14,6 +15,7 @@ import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.animation.LinearInterpolator;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -65,6 +67,7 @@ public class SwitchView extends LinearLayout {
     //SlideView
     private TextView mSlideView;
     private boolean isSlideViewPressed;
+    private TimeInterpolator mInterpolator;
 
     public SwitchView(Context context) {
         this(context, null);
@@ -80,6 +83,7 @@ public class SwitchView extends LinearLayout {
     }
 
     private void init() {
+        mInterpolator = new LinearInterpolator();
         mNormalTextSize = DEFAULT_TEXT_SIZE;
         mSelectedTextSize = DEFAULT_TEXT_SIZE;
         mItemWidth = dpToPx(DEFAULT_ITEM_WIDTH);
@@ -94,6 +98,7 @@ public class SwitchView extends LinearLayout {
     private void setupSlideView() {
         mSlideView = null;
         removeAllViews();
+        mLastSelectedPosition = 0;//默认处于0位置
         mSlideView = new TextView(getContext());
         setupLayoutParameter(mItemWidth, mItemHeight);
         mSlideView.setBackgroundResource(mSelectedDrawableRedId);
@@ -101,7 +106,6 @@ public class SwitchView extends LinearLayout {
         mSlideView.setGravity(Gravity.CENTER);
         mSlideView.setTextSize(mSelectedTextSize);
         addView(mSlideView);
-        mLastSelectedPosition = 0;//默认处于0位置
     }
 
     private int oldItemWidth;
@@ -153,17 +157,6 @@ public class SwitchView extends LinearLayout {
     }
 
     /**
-     * 平滑移动到上一个位置
-     */
-    public void smoothScrollToLastPosition(int position) {
-        if (position == INVALIDATE_POSITION) {
-            return;
-        }
-        int rangeDistance = (mLastSelectedPosition - position) * mItemWidth;
-        moveTo(position, rangeDistance, 200);
-    }
-
-    /**
      * 平滑移动到指定位置
      */
     public void smoothScrollTo(int position) {
@@ -174,11 +167,18 @@ public class SwitchView extends LinearLayout {
         moveTo(position, rangeDistance, 200);
     }
 
+    /**
+     * 让SlideView在指定时间内移动指定距离
+     *
+     * @param position       移动到的目标位置
+     * @param scrollDistance 移动的距离
+     * @param duration       时长
+     */
     private void moveTo(final int position, float scrollDistance, long duration) {
         if (position != INVALIDATE_POSITION) {
             mLastSelectedPosition = position;
         }
-        mSlideView.animate().xBy(scrollDistance).setDuration(duration)
+        mSlideView.animate().xBy(scrollDistance).setDuration(duration).setInterpolator(mInterpolator)
                 .withEndAction(new TimerTask() {
                     @Override
                     public void run() {
@@ -187,6 +187,16 @@ public class SwitchView extends LinearLayout {
                         }
                     }
                 });
+    }
+
+    /**
+     * 设置插值器
+     */
+    public void setInterpolator(TimeInterpolator interpolator) {
+        if (interpolator == null) {
+            return;
+        }
+        mInterpolator = interpolator;
     }
 
     /**
@@ -276,6 +286,16 @@ public class SwitchView extends LinearLayout {
     }
 
     /**
+     * 该方法用来设置默认选中位置
+     * 其他需要移动位置的情况请使用{@link #smoothScrollTo(int)}
+     */
+    public void setDefaultSelectedPosition(int position) {
+        mSelectedPosition = position;
+        setupLayoutParameter(mItemWidth, mItemHeight);
+        mLastSelectedPosition = position;
+    }
+
+    /**
      * 设置item中填充的文本【运行时不可动态更改】
      */
     public void setTextArray(String[] textArray) {
@@ -327,7 +347,7 @@ public class SwitchView extends LinearLayout {
         for (int i = 0; i < mTextArray.length; i++) {
             //每个position的范围，用来判断任意点是否在某个范围内
             mItemBounds.add(new RectF(i, 0, mItemWidth * (i + 1), mItemHeight));
-            //每个item的中心点（顶部居中），用来获取手指抬起时，mSlideView的顶部中心点与某个item中心点的距离
+            //每个item的中心点（顶部居中），用来获取手指抬起时，SlideView的顶部中心点与某个item中心点的距离
             mItemCenterPoint.add(new PointF(mItemWidth * i + mItemWidth / 2, mSlideView.getY()));
         }
     }
@@ -361,6 +381,7 @@ public class SwitchView extends LinearLayout {
                 int downPosition = findPositionByPoint(mLastX, lastY);
                 //判断按下的是否是SlideView
                 isSlideViewPressed = downPosition == mLastSelectedPosition;
+                //若按下的是SlideView，则捕获该次事件
                 if (isSlideViewPressed) {
                     break;
                 }
@@ -381,16 +402,36 @@ public class SwitchView extends LinearLayout {
                 }
                 break;
             case MotionEvent.ACTION_UP:
+                int lastSelectedPosition = mLastSelectedPosition;
                 if (mScrollEnable && isSlideViewPressed) {
                     float x = mSlideView.getX() + mSlideView.getWidth() / 2;
                     float y = mSlideView.getY();
-                    mSelectedPosition = findPositionByPoint(x, y);
-                    float distance = calculateDistanceFromCurrentToTarget(x, y);
-                    moveTo(mSelectedPosition, distance, 50);
+                    int targetPosition = findPositionByPoint(x, y);
+                    //若目标位置是锁定位置，则返回到上一个位置
+                    if (targetPosition == mLockedPosition) {
+                        float distance = calculateDistanceFromCurrentToTarget(x, mLastSelectedPosition);
+                        moveTo(mLastSelectedPosition, distance, 50);
+                        break;
+                    } else {
+                        mSelectedPosition = targetPosition;
+                        float distance = calculateDistanceFromCurrentToTarget(x, mSelectedPosition);
+                        //当前选中位置与上次选中位置是否相等，若相等则只滑动，不触发回调，否则既滑动又触发回调
+                        if (mSelectedPosition == mLastSelectedPosition) {
+                            moveTo(mSelectedPosition, distance, 50);
+                            break;
+                        } else {
+                            moveTo(mSelectedPosition, distance, 50);
+                        }
+                    }
                 } else if (!isSlideViewPressed) {
                     float x = event.getX();
                     float y = event.getY();
-                    mSelectedPosition = findPositionByPoint(x, y);
+                    int targetPosition = findPositionByPoint(x, y);
+                    //若目标位置是锁定位置，则返回到上一个位置
+                    if (targetPosition == mLockedPosition) {
+                        break;
+                    }
+                    mSelectedPosition = targetPosition;
                     if (mSelectedPosition == INVALIDATE_POSITION) {
                         break;
                     }
@@ -400,7 +441,7 @@ public class SwitchView extends LinearLayout {
                     smoothScrollTo(mSelectedPosition);
                 }
                 if (mItemClickListener != null) {
-                    mItemClickListener.onItemClick(mSelectedPosition);
+                    mItemClickListener.onItemClick(mSelectedPosition, lastSelectedPosition);
                 }
                 break;
         }
@@ -435,12 +476,10 @@ public class SwitchView extends LinearLayout {
      * 计算手指抬起点到目标点的距离，用于滑动
      *
      * @param x 给定点的x坐标
-     * @param y 给定点的x坐标
      * @return 任意点到目标点的距离
      * @see #findPositionByPoint(float x, float y);根据该方法查找目标点
      */
-    private float calculateDistanceFromCurrentToTarget(float x, float y) {
-        int targetPosition = findPositionByPoint(x, y);
+    private float calculateDistanceFromCurrentToTarget(float x, int targetPosition) {
         if (targetPosition == INVALIDATE_POSITION) {
             return 0;
         }
