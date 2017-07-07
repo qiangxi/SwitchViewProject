@@ -6,15 +6,15 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PointF;
 import android.graphics.RectF;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.support.annotation.DrawableRes;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
-import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.qiangxi.switchview.callback.OnItemClickListener;
@@ -25,16 +25,13 @@ import java.util.TimerTask;
 
 /**
  * @author qiang_xi
- *         7月3号需要干的事情：
- *         1.把选中背景换成view
- *         2.使用ViewDragHelper，做好view 的滑动和点击
- *         3.研究如何在滑动的时候，让字体颜色展示在view上
+ *         // FIXME: 2017/7/7 对锁定位置的处理
+ *         其他都搞定了，目前只剩下：当手指抬起时，如果目标位置为锁定位置，则不滑动到锁定位置，而是滑动到之前的位置，且不触发回调
  */
-public class SwitchView extends FrameLayout {
-    //默认值，单位dp
-    private static final int DEFAULT_TOTAL_ITEM_COUNT = 4;//总item数量
-    private static final int DEFAULT_ITEM_WIDTH = 80;//默认item宽度
-    private static final int DEFAULT_ITEM_HEIGHT = 50;//默认item高度
+public class SwitchView extends LinearLayout {
+    //默认值
+    private static final int DEFAULT_ITEM_WIDTH = 80;//默认item宽度，单位dp
+    private static final int DEFAULT_ITEM_HEIGHT = 50;//默认item高度，单位dp
     private static final int DEFAULT_TEXT_SIZE = 14;//默认文本大小
     private static final int INVALIDATE_POSITION = -1;//无效位置
 
@@ -44,16 +41,14 @@ public class SwitchView extends FrameLayout {
     private int mLastSelectedPosition = INVALIDATE_POSITION;//滑块所处的上一个位置
     private int mSelectedPosition;//滑块所处的当前位置
     private int mLockedPosition = INVALIDATE_POSITION;//锁定的位置
-    private int mTotalItemCount = DEFAULT_TOTAL_ITEM_COUNT;
     //颜色
     private int mNormalTextColor = Color.WHITE;//正常的文字颜色
-    private int mSelectedTextColor = Color.YELLOW;//选中的文字颜色
-    private int mSelectedItemBgColor = Color.WHITE;//选中的item背景颜色.
+    private int mSelectedTextColor = Color.RED;//选中的文字颜色
+    private int mSelectedDrawableRedId;//选中item的背景drawable
     //字体大小
     private float mNormalTextSize;
     private float mSelectedTextSize;
     //范围
-    private RectF mSelectedItemBound = new RectF();//选中的item的范围
     private List<RectF> mItemBounds = new ArrayList<>();
     private List<PointF> mItemCenterPoint = new ArrayList<>();
     //画笔
@@ -64,14 +59,11 @@ public class SwitchView extends FrameLayout {
     private int mItemHeight;
     private int[] mSelectedBgMarginArray = new int[4];//选中的item的背景的margin值，位置对应关系为：int[left,top,right,bottom]
     //文本
-    private String[] mTextArray = new String[mTotalItemCount];
+    private String[] mTextArray = {"未知", "休息", "上班", "下班"};
     //point
     private int mLastX;
-    private int mLastY;
     //SlideView
     private TextView mSlideView;
-    //SlideView bg
-    private Drawable mSelectedDrawable;
     private boolean isSlideViewPressed;
 
     public SwitchView(Context context) {
@@ -88,36 +80,52 @@ public class SwitchView extends FrameLayout {
     }
 
     private void init() {
-        mNormalTextSize = spToPx(DEFAULT_TEXT_SIZE);
+        mNormalTextSize = DEFAULT_TEXT_SIZE;
+        mSelectedTextSize = DEFAULT_TEXT_SIZE;
         mItemWidth = dpToPx(DEFAULT_ITEM_WIDTH);
         mItemHeight = dpToPx(DEFAULT_ITEM_HEIGHT);
         mTextPaint.setDither(true);
+        mSelectedDrawableRedId = R.drawable.bg_selected_drawable;
         mBgPaint.setDither(true);
-        generateDefaultTextArray();
         setupDefaultSelectedBgMargin();
         setupSlideView();
     }
 
     private void setupSlideView() {
+        mSlideView = null;
         removeAllViews();
-        mSelectedDrawable = getContext().getResources().getDrawable(R.drawable.bg_selected_drawable);
         mSlideView = new TextView(getContext());
-        setupLayoutParam(mItemWidth, mItemHeight);
-        mSlideView.setBackground(mSelectedDrawable);
+        setupLayoutParameter(mItemWidth, mItemHeight);
+        mSlideView.setBackgroundResource(mSelectedDrawableRedId);
         mSlideView.setTextColor(mSelectedTextColor);
         mSlideView.setGravity(Gravity.CENTER);
-        mSlideView.setTextSize(DEFAULT_TEXT_SIZE);
+        mSlideView.setTextSize(mSelectedTextSize);
         addView(mSlideView);
         mLastSelectedPosition = 0;//默认处于0位置
     }
 
-    private void setupLayoutParam(int itemWidth, int itemHeight) {
-        int width = itemWidth - mSelectedBgMarginArray[0] - mSelectedBgMarginArray[2];
-        int height = itemHeight - mSelectedBgMarginArray[1] - mSelectedBgMarginArray[3];
-        LayoutParams lp = new LayoutParams(width, height);
-        lp.gravity = Gravity.CENTER_VERTICAL;
-        lp.leftMargin = mSelectedBgMarginArray[0] + itemWidth * mSelectedPosition;
-        mSlideView.setLayoutParams(lp);
+    private int oldItemWidth;
+    private int oldItemHeight;
+
+    /**
+     * 增加oldItemWidth，oldItemHeight，用来防止滑动时抖动。
+     * 抖动的原因：属性动画对采用xBy的方式位移时，每次都会回调onLayout方法，
+     * 由于在onLayout方法中调用了这个方法，导致每次都会重设SlideView的LayoutParameter，
+     * 但实际上宽高并没有发生改变，没必要每次都重设SlideView的LayoutParameter，
+     * 所以添加oldItemWidth，oldItemHeight，用来过滤掉一些非必要的调用，
+     * 既解决了抖动的问题，又节省了大量性能。
+     */
+    private void setupLayoutParameter(int itemWidth, int itemHeight) {
+        if (oldItemWidth != itemWidth || oldItemHeight != itemHeight) {
+            int width = itemWidth - mSelectedBgMarginArray[0] - mSelectedBgMarginArray[2];
+            int height = itemHeight - mSelectedBgMarginArray[1] - mSelectedBgMarginArray[3];
+            LayoutParams lp = new LayoutParams(width, height);
+            lp.gravity = Gravity.CENTER_VERTICAL;
+            lp.leftMargin = mSelectedBgMarginArray[0] + itemWidth * mSelectedPosition;
+            mSlideView.setLayoutParams(lp);
+        }
+        oldItemWidth = itemWidth;
+        oldItemHeight = itemHeight;
         mSlideView.setText(mTextArray[mSelectedPosition]);
     }
 
@@ -126,13 +134,6 @@ public class SwitchView extends FrameLayout {
         mSelectedBgMarginArray[1] = dpToPx(5);
         mSelectedBgMarginArray[2] = dpToPx(5);
         mSelectedBgMarginArray[3] = dpToPx(5);
-    }
-
-    private void generateDefaultTextArray() {
-        mTextArray[0] = "未知";
-        mTextArray[1] = "休息";
-        mTextArray[2] = "上班";
-        mTextArray[3] = "下班";
     }
 
     /**
@@ -174,9 +175,10 @@ public class SwitchView extends FrameLayout {
     }
 
     private void moveTo(final int position, float scrollDistance, long duration) {
-        mSlideView.animate()
-                .xBy(scrollDistance)
-                .setDuration(duration)
+        if (position != INVALIDATE_POSITION) {
+            mLastSelectedPosition = position;
+        }
+        mSlideView.animate().xBy(scrollDistance).setDuration(duration)
                 .withEndAction(new TimerTask() {
                     @Override
                     public void run() {
@@ -184,22 +186,107 @@ public class SwitchView extends FrameLayout {
                             mSlideView.setText(mTextArray[position]);
                         }
                     }
-                })
-                .start();
+                });
     }
 
     /**
      * 锁定指定位置，锁定之后该位置不可点击和也不能滑动到该位置
      */
-    public void lockPosition(int position) {
+    public void setLockPosition(int position) {
         mLockedPosition = position;
     }
 
     /**
      * 解锁指定位置
      */
-    public void unlockPosition(int position) {
+    public void unlockPosition() {
         mLockedPosition = -1;
+    }
+
+    public int getLockPosition() {
+        return mLockedPosition;
+    }
+
+    /**
+     * 获取item总数量
+     */
+    public int getTotalItemCount() {
+        return mTextArray.length;
+    }
+
+    /**
+     * 设置未选中的item的文本颜色
+     */
+    public void setNormalTextColor(int normalTextColor) {
+        mNormalTextColor = normalTextColor;
+        invalidate();
+    }
+
+    /**
+     * 设置选中的item的文本颜色
+     */
+    public void setSelectedTextColor(int selectedTextColor) {
+        mSelectedTextColor = selectedTextColor;
+        if (mSlideView != null) {
+            mSlideView.setTextColor(mSelectedTextColor);
+        }
+    }
+
+    /**
+     * 设置选中的item的背景drawable
+     */
+    public void setSelectedDrawableResId(@DrawableRes int selectedDrawableResId) {
+        if (selectedDrawableResId == 0) {
+            return;
+        }
+        mSelectedDrawableRedId = selectedDrawableResId;
+        if (mSlideView != null) {
+            mSlideView.setBackgroundResource(mSelectedDrawableRedId);
+        }
+    }
+
+    /**
+     * 设置未选中的item的字体大小
+     */
+    public void setNormalTextSize(float normalTextSize) {
+        mNormalTextSize = normalTextSize;
+        invalidate();
+    }
+
+    /**
+     * 设置选中的item的字体大小
+     */
+    public void setSelectedTextSize(float selectedTextSize) {
+        mSelectedTextSize = selectedTextSize;
+        if (mSlideView != null) {
+            mSlideView.setTextSize(TypedValue.COMPLEX_UNIT_SP, mSelectedTextSize);
+        }
+    }
+
+    /**
+     * 设置选中的item的四周的margin值
+     *
+     * @param selectedBgMarginArray 位置关系：int[left,top，right，bottom]
+     */
+    public void setSelectedBgMarginArray(int[] selectedBgMarginArray) {
+        if (selectedBgMarginArray == null || selectedBgMarginArray.length != 4) {
+            return;
+        }
+        mSelectedBgMarginArray = selectedBgMarginArray;
+    }
+
+    /**
+     * 设置item中填充的文本【运行时不可动态更改】
+     */
+    public void setTextArray(String[] textArray) {
+        if (textArray == null) {
+            throw new IllegalArgumentException("textArray不可为null");
+        }
+        mTextArray = textArray;
+    }
+
+    public TextView getSlideView() {
+        return mSlideView;
     }
 
     @Override
@@ -213,7 +300,7 @@ public class SwitchView extends FrameLayout {
         int width;
         int height;
         if (widthMode == MeasureSpec.AT_MOST) {
-            width = mItemWidth * mTotalItemCount;
+            width = mItemWidth * mTextArray.length;
         } else {
             width = widthSize;
         }
@@ -228,26 +315,29 @@ public class SwitchView extends FrameLayout {
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
-        mItemWidth = getWidth() / mTotalItemCount;
+        mItemWidth = getWidth() / mTextArray.length;
         mItemHeight = getHeight();
+        setupLayoutParameter(mItemWidth, mItemHeight);
         setupItemBoundsAndPoint();
     }
 
     private void setupItemBoundsAndPoint() {
         mItemBounds.clear();
-        for (int i = 0; i < mTotalItemCount; i++) {
+        mItemCenterPoint.clear();
+        for (int i = 0; i < mTextArray.length; i++) {
+            //每个position的范围，用来判断任意点是否在某个范围内
             mItemBounds.add(new RectF(i, 0, mItemWidth * (i + 1), mItemHeight));
+            //每个item的中心点（顶部居中），用来获取手指抬起时，mSlideView的顶部中心点与某个item中心点的距离
             mItemCenterPoint.add(new PointF(mItemWidth * i + mItemWidth / 2, mSlideView.getY()));
         }
     }
 
-
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        for (int i = 0; i < mTotalItemCount; i++) {
-            mTextPaint.setColor(mNormalTextColor);
-            mTextPaint.setTextSize(mNormalTextSize);
+        mTextPaint.setColor(mNormalTextColor);
+        mTextPaint.setTextSize(spToPx(mNormalTextSize));
+        for (int i = 0; i < mTextArray.length; i++) {
             drawText(canvas, i);
         }
     }
@@ -267,17 +357,22 @@ public class SwitchView extends FrameLayout {
         switch (action) {
             case MotionEvent.ACTION_DOWN:
                 mLastX = (int) event.getX();
-                mLastY = (int) event.getY();
-                int downPosition = findPositionByPoint(mLastX, mLastY);
-                if (downPosition == mLockedPosition) {
-                    return false;//点击的是被锁定的位置则不处理
-                }
+                int lastY = (int) event.getY();
+                int downPosition = findPositionByPoint(mLastX, lastY);
+                //判断按下的是否是SlideView
                 isSlideViewPressed = downPosition == mLastSelectedPosition;
+                if (isSlideViewPressed) {
+                    break;
+                }
+                //按下的是被锁定的位置则不处理
+                if (downPosition == mLockedPosition) {
+                    return false;
+                }
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (mScrollEnable && isSlideViewPressed) {
-                    //横向滑动范围
                     float x = event.getX();
+                    //mSlideView横向滑动范围,在这个范围内都可滑动
                     if (mSlideView.getX() > 0 && mSlideView.getX() < getWidth() - mItemWidth * 4 / 5) {
                         float distance = x - mLastX;
                         moveTo(INVALIDATE_POSITION, distance, 0);
@@ -290,16 +385,15 @@ public class SwitchView extends FrameLayout {
                     float x = mSlideView.getX() + mSlideView.getWidth() / 2;
                     float y = mSlideView.getY();
                     mSelectedPosition = findPositionByPoint(x, y);
-                    float distance = findDistanceFromCurrentToTarget(x, y);
+                    float distance = calculateDistanceFromCurrentToTarget(x, y);
                     moveTo(mSelectedPosition, distance, 50);
-                } else {
+                } else if (!isSlideViewPressed) {
                     float x = event.getX();
                     float y = event.getY();
                     mSelectedPosition = findPositionByPoint(x, y);
                     if (mSelectedPosition == INVALIDATE_POSITION) {
                         break;
                     }
-
                     if (mSelectedPosition == mLastSelectedPosition) {
                         break;
                     }
@@ -308,32 +402,44 @@ public class SwitchView extends FrameLayout {
                 if (mItemClickListener != null) {
                     mItemClickListener.onItemClick(mSelectedPosition);
                 }
-                mLastSelectedPosition = mSelectedPosition;
-
                 break;
         }
         return true;
     }
 
+    /**
+     * 根据任意点x，y，找到该点对应的position
+     *
+     * @param x 给定点的x坐标
+     * @param y 给定点的x坐标
+     * @return 给定点对应的position
+     */
     private int findPositionByPoint(float x, float y) {
-        if (x < mItemBounds.get(0).left) {
-            return 0;
-        }
-
-        if (x >= mItemBounds.get(mItemBounds.size() - 1).right) {
-            return mItemBounds.size() - 1;
-        }
-
         for (int i = 0; i < mItemBounds.size(); i++) {
-
             if (mItemBounds.get(i).contains(x, y)) {
                 return i;
             }
         }
+        //纠偏，防止数组越界
+        if (x < mItemBounds.get(0).left) {
+            return 0;
+        }
+        //纠偏，防止数组越界
+        if (x >= mItemBounds.get(mItemBounds.size() - 1).right) {
+            return mItemBounds.size() - 1;
+        }
         return INVALIDATE_POSITION;
     }
 
-    private float findDistanceFromCurrentToTarget(float x, float y) {
+    /**
+     * 计算手指抬起点到目标点的距离，用于滑动
+     *
+     * @param x 给定点的x坐标
+     * @param y 给定点的x坐标
+     * @return 任意点到目标点的距离
+     * @see #findPositionByPoint(float x, float y);根据该方法查找目标点
+     */
+    private float calculateDistanceFromCurrentToTarget(float x, float y) {
         int targetPosition = findPositionByPoint(x, y);
         if (targetPosition == INVALIDATE_POSITION) {
             return 0;
@@ -347,10 +453,17 @@ public class SwitchView extends FrameLayout {
     @Override
     protected Parcelable onSaveInstanceState() {
         final Bundle bundle = new Bundle();
-        //保存父类的实现代码
         bundle.putParcelable("superState", super.onSaveInstanceState());
         bundle.putInt("selectedPosition", mSelectedPosition);
         bundle.putInt("lastSelectedPosition", mLastSelectedPosition);
+        bundle.putInt("oldItemWidth", oldItemWidth);
+        bundle.putInt("oldItemHeight", oldItemHeight);
+        bundle.putInt("normalTextColor", mNormalTextColor);
+        bundle.putFloat("normalTextSize", mNormalTextSize);
+        bundle.putInt("selectedTextColor", mSelectedTextColor);
+        bundle.putFloat("selectedTextSize", mSelectedTextSize);
+        bundle.putInt("selectedDrawableRedId", mSelectedDrawableRedId);
+        bundle.putBoolean("scrollEnable", mScrollEnable);
         return bundle;
     }
 
@@ -358,21 +471,34 @@ public class SwitchView extends FrameLayout {
     protected void onRestoreInstanceState(Parcelable state) {
         if (state instanceof Bundle) {
             Bundle bundle = (Bundle) state;
-            //获取父类的实现代码,并赋值
             state = bundle.getParcelable("superState");
             mSelectedPosition = bundle.getInt("selectedPosition");
             mLastSelectedPosition = bundle.getInt("lastSelectedPosition");
-            setupLayoutParam(mItemWidth, mItemHeight);
+            oldItemWidth = bundle.getInt("oldItemWidth");
+            oldItemHeight = bundle.getInt("oldItemHeight");
+            mNormalTextColor = bundle.getInt("normalTextColor");
+            mNormalTextSize = bundle.getFloat("normalTextSize");
+            mSelectedTextColor = bundle.getInt("selectedTextColor");
+            mSelectedTextSize = bundle.getFloat("selectedTextSize");
+            mSelectedDrawableRedId = bundle.getInt("selectedDrawableRedId");
+            mScrollEnable = bundle.getBoolean("scrollEnable");
+            invalidate();
+            setupLayoutParameter(mItemWidth, mItemHeight);
+            if (mSlideView != null) {
+                mSlideView.setTextColor(mSelectedTextColor);
+                mSlideView.setTextSize(TypedValue.COMPLEX_UNIT_SP, mSelectedTextSize);
+                mSlideView.setBackgroundResource(mSelectedDrawableRedId);
+            }
         }
         super.onRestoreInstanceState(state);
     }
 
-    public int dpToPx(int dp) {
+    private int dpToPx(int dp) {
         float scale = getContext().getResources().getDisplayMetrics().density;
         return (int) ((dp * scale) + 0.5f);
     }
 
-    public float spToPx(float sp) {
+    private float spToPx(float sp) {
         return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP,
                 sp, getContext().getResources().getDisplayMetrics());
     }
@@ -381,9 +507,6 @@ public class SwitchView extends FrameLayout {
         return (int) mTextPaint.measureText(text);
     }
 
-    /**
-     * 获取垂直方向文本的绘制起点(精确测量)
-     */
     private int getTextStartY() {
         Paint.FontMetricsInt fm = mTextPaint.getFontMetricsInt();
         return getHeight() / 2 - fm.descent + (fm.descent - fm.ascent) / 2;
