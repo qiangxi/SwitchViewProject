@@ -23,6 +23,15 @@
             android:id="@+id/switchView"
             android:layout_width="match_parent"
             android:layout_height="80dp"
+            app:lockedPosition="2"
+            app:normalTextColor="@color/colorPrimaryDark"
+            app:normalTextSize="5sp"
+            app:scrollEnable="true"
+            app:selectedTextColor="@android:color/holo_green_dark"
+            app:selectedTextSize="10sp"
+            app:textArray="@array/textArray"
+            app:defaultSelectedPosition="2"
+            app:selectedDrawableResId="@mipmap/ic_launcher"
             android:background="@android:color/black"/>
     </LinearLayout>
 </layout>

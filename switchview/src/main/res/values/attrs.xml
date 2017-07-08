@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="SwitchView">
+        <attr name="textArray" format="reference" />
+        <attr name="defaultSelectedPosition" format="integer" />
+        <attr name="normalTextColor" format="color" />
+        <attr name="normalTextSize" format="dimension" />
+        <attr name="selectedTextColor" format="color" />
+        <attr name="selectedTextSize" format="dimension" />
+        <attr name="selectedDrawableResId" format="integer" />
+        <attr name="scrollEnable" format="boolean" />
+        <attr name="lockedPosition" format="integer" />
+    </declare-styleable>
+</resources>

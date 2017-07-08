@@ -27,9 +27,9 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         mSwitchView = (SwitchView) findViewById(switchView);
 //        mSwitchView.setTextArray(textArray);//有效
-        mSwitchView.setLockPosition(0);//有效
+//        mSwitchView.setLockPosition(0);//有效
         mSwitchView.setSelectedBgMarginArray(marginArray);
-        mSwitchView.setDefaultSelectedPosition(0);
+//        mSwitchView.setDefaultSelectedPosition(0);
         mSwitchView.setInterpolator(new OvershootInterpolator());
         mSwitchView.setOnItemClickListener(new OnItemClickListener() {
             @Override

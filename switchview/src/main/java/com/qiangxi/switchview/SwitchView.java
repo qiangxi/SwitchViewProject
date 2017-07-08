@@ -2,6 +2,7 @@ package com.qiangxi.switchview;
 
 import android.animation.TimeInterpolator;
 import android.content.Context;
+import android.content.res.TypedArray;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -46,7 +47,7 @@ public class SwitchView extends LinearLayout {
     //颜色
     private int mNormalTextColor = Color.WHITE;//正常的文字颜色
     private int mSelectedTextColor = Color.RED;//选中的文字颜色
-    private int mSelectedDrawableRedId;//选中item的背景drawable
+    private int mSelectedDrawableResId;//选中item的背景drawable
     //字体大小
     private float mNormalTextSize;
     private float mSelectedTextSize;
@@ -67,7 +68,10 @@ public class SwitchView extends LinearLayout {
     //SlideView
     private TextView mSlideView;
     private boolean isSlideViewPressed;
+    //插值器
     private TimeInterpolator mInterpolator;
+    //是否禁用一切手势,默认不禁用
+    private boolean isEnable = true;
 
     public SwitchView(Context context) {
         this(context, null);
@@ -79,29 +83,55 @@ public class SwitchView extends LinearLayout {
 
     public SwitchView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+
+        TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.SwitchView);
+        mScrollEnable = a.getBoolean(R.styleable.SwitchView_scrollEnable, true);
+        mNormalTextColor = a.getColor(R.styleable.SwitchView_normalTextColor, Color.WHITE);
+        mNormalTextSize = a.getDimensionPixelSize(R.styleable.SwitchView_normalTextSize, DEFAULT_TEXT_SIZE);
+        mSelectedTextColor = a.getColor(R.styleable.SwitchView_selectedTextColor, Color.RED);
+        mSelectedTextSize = a.getDimensionPixelSize(R.styleable.SwitchView_selectedTextSize, DEFAULT_TEXT_SIZE);
+        mSelectedDrawableResId = a.getResourceId(R.styleable.SwitchView_selectedDrawableResId, R.drawable.bg_selected_drawable);
+        mLockedPosition = a.getInt(R.styleable.SwitchView_lockedPosition, INVALIDATE_POSITION);
+        CharSequence[] textArray = a.getTextArray(R.styleable.SwitchView_textArray);
+        mSelectedPosition = mLastSelectedPosition = a.getInt(R.styleable.SwitchView_defaultSelectedPosition, 0);
+        a.recycle();
+        convertCharSequenceArrayToStringArray(textArray);
         init();
+    }
+
+    private void generateDefaultSelectedBgMargin() {
+        mSelectedBgMarginArray[0] = dpToPx(5);
+        mSelectedBgMarginArray[1] = dpToPx(5);
+        mSelectedBgMarginArray[2] = dpToPx(5);
+        mSelectedBgMarginArray[3] = dpToPx(5);
+    }
+
+    private void convertCharSequenceArrayToStringArray(CharSequence[] array) {
+        if (array == null) {
+            throw new IllegalArgumentException("文本数组不可为null");
+        }
+        mTextArray = null;
+        mTextArray = new String[array.length];
+        for (int i = 0; i < array.length; i++) {
+            mTextArray[i] = array[i].toString();
+        }
     }
 
     private void init() {
         mInterpolator = new LinearInterpolator();
-        mNormalTextSize = DEFAULT_TEXT_SIZE;
-        mSelectedTextSize = DEFAULT_TEXT_SIZE;
         mItemWidth = dpToPx(DEFAULT_ITEM_WIDTH);
         mItemHeight = dpToPx(DEFAULT_ITEM_HEIGHT);
         mTextPaint.setDither(true);
-        mSelectedDrawableRedId = R.drawable.bg_selected_drawable;
         mBgPaint.setDither(true);
-        setupDefaultSelectedBgMargin();
         setupSlideView();
     }
 
     private void setupSlideView() {
         mSlideView = null;
         removeAllViews();
-        mLastSelectedPosition = 0;//默认处于0位置
         mSlideView = new TextView(getContext());
         setupLayoutParameter(mItemWidth, mItemHeight);
-        mSlideView.setBackgroundResource(mSelectedDrawableRedId);
+        mSlideView.setBackgroundResource(mSelectedDrawableResId);
         mSlideView.setTextColor(mSelectedTextColor);
         mSlideView.setGravity(Gravity.CENTER);
         mSlideView.setTextSize(mSelectedTextSize);
@@ -131,13 +161,6 @@ public class SwitchView extends LinearLayout {
         oldItemWidth = itemWidth;
         oldItemHeight = itemHeight;
         mSlideView.setText(mTextArray[mSelectedPosition]);
-    }
-
-    private void setupDefaultSelectedBgMargin() {
-        mSelectedBgMarginArray[0] = dpToPx(5);
-        mSelectedBgMarginArray[1] = dpToPx(5);
-        mSelectedBgMarginArray[2] = dpToPx(5);
-        mSelectedBgMarginArray[3] = dpToPx(5);
     }
 
     /**
@@ -249,9 +272,9 @@ public class SwitchView extends LinearLayout {
         if (selectedDrawableResId == 0) {
             return;
         }
-        mSelectedDrawableRedId = selectedDrawableResId;
+        mSelectedDrawableResId = selectedDrawableResId;
         if (mSlideView != null) {
-            mSlideView.setBackgroundResource(mSelectedDrawableRedId);
+            mSlideView.setBackgroundResource(mSelectedDrawableResId);
         }
     }
 
@@ -305,8 +328,26 @@ public class SwitchView extends LinearLayout {
         mTextArray = textArray;
     }
 
+    /**
+     * 返回SlideView
+     *
+     * @return
+     */
     public TextView getSlideView() {
         return mSlideView;
+    }
+
+    public boolean isEnable() {
+        return isEnable;
+    }
+
+    /**
+     * 是否禁用一切手势
+     *
+     * @param enable false:禁用,true不禁用
+     */
+    public void setEnable(boolean enable) {
+        isEnable = enable;
     }
 
     @Override
@@ -376,6 +417,9 @@ public class SwitchView extends LinearLayout {
         int action = event.getAction();
         switch (action) {
             case MotionEvent.ACTION_DOWN:
+                if (!isEnable) {
+                    return false;
+                }
                 mLastX = (int) event.getX();
                 int lastY = (int) event.getY();
                 int downPosition = findPositionByPoint(mLastX, lastY);
@@ -501,7 +545,7 @@ public class SwitchView extends LinearLayout {
         bundle.putFloat("normalTextSize", mNormalTextSize);
         bundle.putInt("selectedTextColor", mSelectedTextColor);
         bundle.putFloat("selectedTextSize", mSelectedTextSize);
-        bundle.putInt("selectedDrawableRedId", mSelectedDrawableRedId);
+        bundle.putInt("selectedDrawableRedId", mSelectedDrawableResId);
         bundle.putBoolean("scrollEnable", mScrollEnable);
         return bundle;
     }
@@ -519,14 +563,14 @@ public class SwitchView extends LinearLayout {
             mNormalTextSize = bundle.getFloat("normalTextSize");
             mSelectedTextColor = bundle.getInt("selectedTextColor");
             mSelectedTextSize = bundle.getFloat("selectedTextSize");
-            mSelectedDrawableRedId = bundle.getInt("selectedDrawableRedId");
+            mSelectedDrawableResId = bundle.getInt("selectedDrawableRedId");
             mScrollEnable = bundle.getBoolean("scrollEnable");
             invalidate();
             setupLayoutParameter(mItemWidth, mItemHeight);
             if (mSlideView != null) {
                 mSlideView.setTextColor(mSelectedTextColor);
                 mSlideView.setTextSize(TypedValue.COMPLEX_UNIT_SP, mSelectedTextSize);
-                mSlideView.setBackgroundResource(mSelectedDrawableRedId);
+                mSlideView.setBackgroundResource(mSelectedDrawableResId);
             }
         }
         super.onRestoreInstanceState(state);
