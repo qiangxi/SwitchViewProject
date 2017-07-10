@@ -10,5 +10,6 @@
         <attr name="selectedDrawableResId" format="integer" />
         <attr name="scrollEnable" format="boolean" />
         <attr name="lockedPosition" format="integer" />
+        <attr name="showTextWhenScrolling" format="boolean" />
     </declare-styleable>
 </resources>

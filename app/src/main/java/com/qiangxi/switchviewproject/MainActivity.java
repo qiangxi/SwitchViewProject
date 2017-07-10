@@ -15,8 +15,7 @@ import java.util.TimerTask;
 import static com.qiangxi.switchviewproject.R.id.switchView;
 
 public class MainActivity extends AppCompatActivity {
-    //    private String[] textArray = {"文本一", "文本二", "文本三", "文本四", "文本五", "文本六"};
-//    private String[] textArray = {"文本一", "文本二", "文本三"};
+//    private String[] textArray = {"文本一", "文本二"};
     private SwitchView mSwitchView;
 
     private int[] marginArray = {20, 20, 20, 20};
@@ -26,11 +25,12 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         mSwitchView = (SwitchView) findViewById(switchView);
-//        mSwitchView.setTextArray(textArray);//有效
-//        mSwitchView.setLockPosition(0);//有效
-        mSwitchView.setSelectedBgMarginArray(marginArray);
+//        mSwitchView.setTextArray(textArray);
+//        mSwitchView.setLockPosition(0);
+//        mSwitchView.setSelectedBgMarginArray(marginArray);
 //        mSwitchView.setDefaultSelectedPosition(0);
         mSwitchView.setInterpolator(new OvershootInterpolator());
+//        mSwitchView.setShowTextWhenScrolling(false);
         mSwitchView.setOnItemClickListener(new OnItemClickListener() {
             @Override
             public void onItemClick(int currentSelectedPosition, final int lastSelectedPosition) {
@@ -47,12 +47,12 @@ public class MainActivity extends AppCompatActivity {
 
     public void click(View view) {
 
-//        mSwitchView.setScrollEnable(false);//有效
-//        mSwitchView.setNormalTextColor(Color.GREEN);//有效
-//        mSwitchView.setNormalTextSize(25);//有效
-//        mSwitchView.setSelectedDrawableResId(R.mipmap.ic_launcher);//有效
-//        mSwitchView.setSelectedTextColor(Color.BLUE);//有效
-//        mSwitchView.setSelectedTextSize(50);//有效
+//        mSwitchView.setScrollEnable(false);
+//        mSwitchView.setNormalTextColor(Color.GREEN);
+//        mSwitchView.setNormalTextSize(25);
+//        mSwitchView.setSelectedDrawableResId(R.mipmap.ic_launcher);
+//        mSwitchView.setSelectedTextColor(Color.BLUE);
+//        mSwitchView.setSelectedTextSize(50);
 
 
 //        mSwitchView.unlockPosition();//有效

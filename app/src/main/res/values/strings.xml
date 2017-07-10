@@ -2,9 +2,9 @@
     <string name="app_name">SwitchViewProject</string>
     <array name="textArray">
         <item>文本一</item>
-        <item>文本而</item>
+        <item>文本二</item>
         <item>文本三</item>
-        <item>文本死</item>
+        <item>文本四</item>
     </array>
 
 </resources>

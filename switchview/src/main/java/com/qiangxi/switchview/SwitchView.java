@@ -28,8 +28,6 @@ import java.util.TimerTask;
 
 /**
  * @author qiang_xi
- *         // FIXME: 2017/7/7 对锁定位置的处理
- *         其他都搞定了，目前只剩下：当手指抬起时，如果目标位置为锁定位置，则不滑动到锁定位置，而是滑动到之前的位置，且不触发回调
  */
 public class SwitchView extends LinearLayout {
     //默认值
@@ -38,8 +36,6 @@ public class SwitchView extends LinearLayout {
     private static final int DEFAULT_TEXT_SIZE = 14;//默认文本大小
     private static final int INVALIDATE_POSITION = -1;//无效位置
 
-    private OnItemClickListener mItemClickListener;
-    private boolean mScrollEnable = true;//是否禁用滑动手势
     //position
     private int mLastSelectedPosition = INVALIDATE_POSITION;//滑块所处的上一个位置
     private int mSelectedPosition;//滑块所处的当前位置
@@ -47,7 +43,7 @@ public class SwitchView extends LinearLayout {
     //颜色
     private int mNormalTextColor = Color.WHITE;//正常的文字颜色
     private int mSelectedTextColor = Color.RED;//选中的文字颜色
-    private int mSelectedDrawableResId;//选中item的背景drawable
+    private int mSelectedDrawableResId;//选中item的背景drawable id
     //字体大小
     private float mNormalTextSize;
     private float mSelectedTextSize;
@@ -63,15 +59,16 @@ public class SwitchView extends LinearLayout {
     private int[] mSelectedBgMarginArray = new int[4];//选中的item的背景的margin值，位置对应关系为：int[left,top,right,bottom]
     //文本
     private String[] mTextArray = {"未知", "休息", "上班", "下班"};
-    //point
-    private int mLastX;
-    //SlideView
-    private TextView mSlideView;
+
+    private int mLastX; //point
+
+    private OnItemClickListener mItemClickListener;
+    private TextView mSlideView; //the SlideView
+    private TimeInterpolator mInterpolator; //插值器
+    private boolean mScrollEnable = true;//是否禁用滑动手势
+    private boolean isEnable = true; //是否禁用一切手势,默认不禁用
     private boolean isSlideViewPressed;
-    //插值器
-    private TimeInterpolator mInterpolator;
-    //是否禁用一切手势,默认不禁用
-    private boolean isEnable = true;
+    private boolean isShowText = true;
 
     public SwitchView(Context context) {
         this(context, null);
@@ -86,6 +83,7 @@ public class SwitchView extends LinearLayout {
 
         TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.SwitchView);
         mScrollEnable = a.getBoolean(R.styleable.SwitchView_scrollEnable, true);
+        isShowText = a.getBoolean(R.styleable.SwitchView_showTextWhenScrolling, true);
         mNormalTextColor = a.getColor(R.styleable.SwitchView_normalTextColor, Color.WHITE);
         mNormalTextSize = a.getDimensionPixelSize(R.styleable.SwitchView_normalTextSize, DEFAULT_TEXT_SIZE);
         mSelectedTextColor = a.getColor(R.styleable.SwitchView_selectedTextColor, Color.RED);
@@ -123,6 +121,7 @@ public class SwitchView extends LinearLayout {
         mItemHeight = dpToPx(DEFAULT_ITEM_HEIGHT);
         mTextPaint.setDither(true);
         mBgPaint.setDither(true);
+        generateDefaultSelectedBgMargin();
         setupSlideView();
     }
 
@@ -198,6 +197,9 @@ public class SwitchView extends LinearLayout {
      * @param duration       时长
      */
     private void moveTo(final int position, float scrollDistance, long duration) {
+        if (!isShowText) {
+            mSlideView.setText("");
+        }
         if (position != INVALIDATE_POSITION) {
             mLastSelectedPosition = position;
         }
@@ -210,6 +212,13 @@ public class SwitchView extends LinearLayout {
                         }
                     }
                 });
+    }
+
+    /**
+     * 在SlideView滑动的时候是否展示文本
+     */
+    public void setShowTextWhenScrolling(boolean isShowText) {
+        this.isShowText = isShowText;
     }
 
     /**
