@@ -17,21 +17,14 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:onClick="click"
-            android:text="点击"/>
+            android:text="点击"
+            android:visibility="gone"/>
 
         <com.qiangxi.switchview.SwitchView
             android:id="@+id/switchView"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="80dp"
-            app:lockedPosition="2"
-            app:normalTextColor="@color/colorPrimaryDark"
-            app:normalTextSize="5sp"
-            app:scrollEnable="true"
-            app:selectedTextColor="@android:color/holo_green_dark"
-            app:selectedTextSize="10sp"
-            app:textArray="@array/textArray"
-            app:defaultSelectedPosition="2"
-            app:showTextWhenScrolling="false"
-            app:selectedDrawableResId="@mipmap/ic_launcher"/>
+            android:background="@color/colorAccent"
+            />
     </LinearLayout>
 </layout>

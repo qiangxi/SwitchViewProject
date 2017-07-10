@@ -41,8 +41,8 @@ public class SwitchView extends LinearLayout {
     private int mSelectedPosition;//滑块所处的当前位置
     private int mLockedPosition = INVALIDATE_POSITION;//锁定的位置
     //颜色
-    private int mNormalTextColor = Color.WHITE;//正常的文字颜色
-    private int mSelectedTextColor = Color.RED;//选中的文字颜色
+    private int mNormalTextColor;//正常的文字颜色
+    private int mSelectedTextColor;//选中的文字颜色
     private int mSelectedDrawableResId;//选中item的背景drawable id
     //字体大小
     private float mNormalTextSize;
@@ -105,13 +105,12 @@ public class SwitchView extends LinearLayout {
     }
 
     private void convertCharSequenceArrayToStringArray(CharSequence[] array) {
-        if (array == null) {
-            throw new IllegalArgumentException("文本数组不可为null");
-        }
-        mTextArray = null;
-        mTextArray = new String[array.length];
-        for (int i = 0; i < array.length; i++) {
-            mTextArray[i] = array[i].toString();
+        if (array != null) {
+            mTextArray = null;
+            mTextArray = new String[array.length];
+            for (int i = 0; i < array.length; i++) {
+                mTextArray[i] = array[i].toString();
+            }
         }
     }
 
@@ -207,7 +206,7 @@ public class SwitchView extends LinearLayout {
                 .withEndAction(new TimerTask() {
                     @Override
                     public void run() {
-                        if (position != INVALIDATE_POSITION) {
+                        if (position != INVALIDATE_POSITION && position < mTextArray.length) {
                             mSlideView.setText(mTextArray[position]);
                         }
                     }
