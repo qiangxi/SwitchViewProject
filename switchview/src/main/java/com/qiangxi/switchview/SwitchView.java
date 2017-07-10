@@ -403,13 +403,13 @@ public class SwitchView extends LinearLayout {
     }
 
     @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
+    protected void dispatchDraw(Canvas canvas) {
         mTextPaint.setColor(mNormalTextColor);
         mTextPaint.setTextSize(spToPx(mNormalTextSize));
         for (int i = 0; i < mTextArray.length; i++) {
             drawText(canvas, i);
         }
+        super.dispatchDraw(canvas);
     }
 
     private void drawText(Canvas canvas, int position) {

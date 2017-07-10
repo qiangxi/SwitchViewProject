@@ -32,7 +32,6 @@
             app:textArray="@array/textArray"
             app:defaultSelectedPosition="2"
             app:showTextWhenScrolling="false"
-            app:selectedDrawableResId="@mipmap/ic_launcher"
-            android:background="@android:color/black"/>
+            app:selectedDrawableResId="@mipmap/ic_launcher"/>
     </LinearLayout>
 </layout>
