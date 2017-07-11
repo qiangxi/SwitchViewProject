@@ -8,19 +8,27 @@
 ![效果2](https://github.com/qiangxi/SwitchViewProject/blob/master/image/%E6%95%88%E6%9E%9C2.gif?raw=true)
 
 ### 更新日志
- 
 #### 2017-07-11 
-发布第一个版本V1.0.0。
+发布第一个稳定版本V1.0.0。
  
 ### 集成方式
 #### gradle：
- 
+```grooxy
+compile 'com.qiangxi.switchview:switchview:1.0.0'
+```
 #### maven：
- 
+```maven
+<dependency>
+  <groupId>com.qiangxi.switchview</groupId>
+  <artifactId>switchview</artifactId>
+  <version>1.0.0</version>
+  <type>pom</type>
+</dependency>
+```
 ### API说明
 API | API调用时机 | 对应的xml属性|作用
 ---|---|---|---
-setOnItemClickListener(OnItemClickListener listener) | view初始化后的任意时刻|无|设置item点击监听
+setOnItemSelectedListener(OnItemSelectedListener listener) | view初始化后的任意时刻|无|设置item选中监听，当item被选中时触发回调
 setScrollEnable(boolean scrollEnable)|view初始化后的任意时刻|app:scrollEnable="boolean"|设置是否禁用滑动手势【true:不禁用；false：禁用；默认为true】
 smoothScrollTo(int position)|需要动态滑动时调用|无|平滑移动到指定位置【注意与setDefaultSelectedPosition(int position)方法区分开来。】
 setShowTextWhenScrolling(boolean isShowText)|view初始化后的任意时刻|app:showTextWhenScrolling="boolean"|滑块在滑动时是否在滑块上显示文本【true：显示；false：不显示；默认为true】
@@ -42,6 +50,65 @@ setEnable(boolean enable)|view初始化后的任意时刻|无|是否禁用所有
 isEnable()|view初始化后的任意时刻|无|是否已经禁用所有手势
  
 ### 基本使用方式
- 
+```java
+public class MainActivity extends AppCompatActivity {
+    private String[] textArray = {"文本一", "文本二", "文本三", "文本四", "文本五"};
+    private SwitchView mSwitchView;
+
+    private int[] marginArray = {20, 20, 20, 20};
+    private boolean isRequestSuccess;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        mSwitchView = (SwitchView) findViewById(switchView);
+//        mSwitchView.setTextArray(textArray);
+//        mSwitchView.setNormalTextColor(Color.GREEN);
+//        mSwitchView.setNormalTextSize(15);
+//        mSwitchView.setSelectedDrawableResId(R.mipmap.ic_launcher);
+//        mSwitchView.setSelectedTextColor(Color.BLUE);
+//        mSwitchView.setSelectedTextSize(18);
+
+//        mSwitchView.setLockPosition(2);
+//        mSwitchView.setSelectedBgMarginArray(marginArray);
+//        mSwitchView.setDefaultSelectedPosition(0);
+//        mSwitchView.setInterpolator(new OvershootInterpolator());
+//        mSwitchView.setShowTextWhenScrolling(false);
+        mSwitchView.setOnItemSelectedListener(new OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(int currentSelectedPosition, final int lastSelectedPosition) {
+                //模拟网络请求
+                new Handler().postDelayed(new TimerTask() {
+                    @Override
+                    public void run() {
+                        if (isRequestSuccess) {
+                            //若请求成功，do nothing
+                        } else {
+                            //若请求失败，调用如下方法移动到上一个位置
+                            mSwitchView.smoothScrollTo(lastSelectedPosition);
+                        }
+                    }
+                }, 2000);
+//                Toast.makeText(MainActivity.this, "currentSelectedPosition=" + currentSelectedPosition + "，lastSelectedPosition=" + lastSelectedPosition, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    public void click(View view) {
+
+//        mSwitchView.setScrollEnable(false);
+//        mSwitchView.setNormalTextColor(Color.GREEN);
+//        mSwitchView.setNormalTextSize(25);
+//        mSwitchView.setSelectedDrawableResId(R.mipmap.ic_launcher);
+//        mSwitchView.setSelectedTextColor(Color.BLUE);
+//        mSwitchView.setSelectedTextSize(50);
+
+
+//        mSwitchView.unlockPosition();//有效
+
+    }
+}
+```
 ### 最后
 如果该项目对你有帮助，还请不吝赏赐star或fork。也欢迎提出issue或pr，一起维护这个项目。 
