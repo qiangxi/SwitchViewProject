@@ -1,4 +1,6 @@
 # SwitchViewProject
+## 对应的文章
+[关于SwitchView简单解读的文章](http://blog.csdn.net/qiang_xi/article/details/74942386)
 ### 效果图：
 ##### 默认效果
 ![默认效果](https://github.com/qiangxi/SwitchViewProject/blob/master/image/%E9%BB%98%E8%AE%A4.gif?raw=true)
