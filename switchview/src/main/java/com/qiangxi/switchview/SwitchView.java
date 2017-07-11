@@ -20,7 +20,7 @@ import android.view.animation.LinearInterpolator;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.qiangxi.switchview.callback.OnItemClickListener;
+import com.qiangxi.switchview.callback.OnItemSelectedListener;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -62,7 +62,7 @@ public class SwitchView extends LinearLayout {
 
     private int mLastX; //point
 
-    private OnItemClickListener mItemClickListener;
+    private OnItemSelectedListener mItemSelectedListener;
     private TextView mSlideView; //the SlideView
     private TimeInterpolator mInterpolator; //插值器
     private boolean mScrollEnable = true;//是否禁用滑动手势
@@ -164,8 +164,8 @@ public class SwitchView extends LinearLayout {
     /**
      * 设置item点击监听
      */
-    public void setOnItemClickListener(OnItemClickListener listener) {
-        mItemClickListener = listener;
+    public void setOnItemSelectedListener(OnItemSelectedListener listener) {
+        mItemSelectedListener = listener;
     }
 
     /**
@@ -492,8 +492,8 @@ public class SwitchView extends LinearLayout {
                     }
                     smoothScrollTo(mSelectedPosition);
                 }
-                if (mItemClickListener != null) {
-                    mItemClickListener.onItemClick(mSelectedPosition, lastSelectedPosition);
+                if (mItemSelectedListener != null) {
+                    mItemSelectedListener.onItemSelected(mSelectedPosition, lastSelectedPosition);
                 }
                 break;
         }
